@@ -11,7 +11,7 @@ from telegram.ext import (
 )
 from datetime import datetime, timedelta
 
-TELEGRAM_TOKEN = '7947643363:AAF146O9Ne0diJk1ihK2A8mYM_9wl0_KHOI'
+TELEGRAM_TOKEN = '8017233867:AAHnIo9gG8rT1ne7D8Ca4WcSsNbvMfC2vQE'
 EMAIL_ADDRESS = 'pyth.pr@gmail.com'
 EMAIL_PASSWORD = 'xcay plim mjky rtdd'
 
