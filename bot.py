@@ -7,7 +7,7 @@ from email.message import EmailMessage
 from telebot.types import ReplyKeyboardMarkup, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardRemove
 from datetime import datetime, timedelta
 
-TOKEN = "7807718978:AAEE4pDJSrnDHHDh8uW4mPoumCaMwBoYq_s"
+TOKEN = "8017233867:AAHnIo9gG8rT1ne7D8Ca4WcSsNbvMfC2vQE"
 bot = telebot.TeleBot(TOKEN)
 
 # Настройки email для подтверждения
