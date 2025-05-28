@@ -1,8 +1,22 @@
 {
   "2098878657": {
-    "email": "",
-    "password": "",
+    "email": "mathmastervlad2006@gmail.com",
+    "password": "321654",
     "subscriptions": [],
-    "notify_days_before": 2
+    "notify_days_before": 2,
+    "last_auth": "2025-05-28T09:08:05.295554"
+  },
+  "7690752969": {
+    "email": "burtsev1284@yandex.ru",
+    "password": "Arseniy228",
+    "subscriptions": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "notify_days_before": 2,
+    "last_auth": "2025-05-28T09:12:15.711312"
   }
 }
