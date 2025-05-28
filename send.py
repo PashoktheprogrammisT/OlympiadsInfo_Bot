@@ -28,7 +28,7 @@ def save_json(data, path):
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 # Состояния пользователей
-user_states = {}  # {user_id: {'state': 'awaiting_email/awaiting_password/awaiting_confirmation', 'email': '', 'password': ''}}
+user_states = {}  # {user_id: {'state': 'awaiting_email/password/confirmation', ...}}
 pending_confirmations = {}  # {user_id: {'email': '', 'password': '', 'code': ''}}
 
 # === ОТПРАВКА EMAIL ===
@@ -50,73 +50,162 @@ def send_confirmation_email(email, code):
 # === ГЛАВНОЕ МЕНЮ ===
 def main_menu():
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row("Список олимпиад", "Мои подписки")
-    kb.row("Подписаться", "⚙Настройки")
-    kb.row("Помощь")
+    kb.row("📋 Список олимпиад", "📌 Мои подписки")
+    kb.row("🔔 Подписаться", "⚙️ Настройки")
+    kb.row("❓ Помощь")
     return kb
 
-# === КОМАНДА START ===
+# === ПРОВЕРКА РЕГИСТРАЦИИ ===
+def is_registered(user_id):
+    users = load_json("users.json")
+    return user_id in users and users[user_id].get('email')
+
+
+
+def login_menu():
+    kb = ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.row("🔑 Войти в аккаунт")
+    kb.row("📝 Зарегистрироваться")
+    return kb
+
+def find_user_by_email(email):
+    users = load_json("users.json")
+    for user_id, user_data in users.items():
+        if user_data.get('email') == email:
+            return user_id, user_data
+    return None, None
+
+# === ОБНОВЛЕННАЯ КОМАНДА START ===
 @bot.message_handler(commands=['start'])
 def start(message):
     user_id = str(message.chat.id)
-    users = load_json("users.json")
     
-    if user_id in users:
+    if is_registered(user_id):
+        bot.send_message(message.chat.id, "Вы уже вошли в систему!", reply_markup=main_menu())
+    else:
+        bot.send_message(message.chat.id, 
+            "Добро пожаловать! Выберите действие:",
+            reply_markup=login_menu()
+        )
+
+# === ОБРАБОТКА КНОПКИ РЕГИСТРАЦИИ ===
+@bot.message_handler(func=lambda m: m.text == "📝 Зарегистрироваться")
+def handle_register_button(message):
+    user_id = str(message.chat.id)
+    
+    if is_registered(user_id):
         bot.send_message(message.chat.id, "Вы уже зарегистрированы!", reply_markup=main_menu())
     else:
-        bot.send_message(message.chat.id, "Добро пожаловать! Для использования бота необходимо зарегистрироваться.")
-        bot.send_message(message.chat.id, "Введите ваш email:")
-        user_states[user_id] = {'state': 'awaiting_email'}
+        bot.send_message(message.chat.id, "Введите ваш email для регистрации:")
+        user_states[user_id] = {'state': 'awaiting_email', 'action': 'register'}
 
-# === ОБРАБОТКА EMAIL ===
-@bot.message_handler(func=lambda message: str(message.chat.id) in user_states and user_states[str(message.chat.id)]['state'] == 'awaiting_email')
+# === ОБРАБОТКА КНОПКИ ВХОДА ===
+@bot.message_handler(func=lambda m: m.text == "🔑 Войти в аккаунт")
+def handle_login_button(message):
+    user_id = str(message.chat.id)
+    
+    if is_registered(user_id):
+        bot.send_message(message.chat.id, "Вы уже вошли в систему!", reply_markup=main_menu())
+    else:
+        bot.send_message(message.chat.id, "Введите ваш email для входа:")
+        user_states[user_id] = {'state': 'awaiting_email', 'action': 'login'}
+
+# === ОБНОВЛЕННАЯ ОБРАБОТКА EMAIL ===
+@bot.message_handler(func=lambda message: str(message.chat.id) in user_states and 
+                     user_states[str(message.chat.id)]['state'] == 'awaiting_email')
 def handle_email(message):
     user_id = str(message.chat.id)
     email = message.text.strip()
+    action = user_states[user_id]['action']
     
     if '@' not in email or '.' not in email:
         bot.send_message(message.chat.id, "Неверный формат email. Попробуйте еще раз:")
         return
     
-    user_states[user_id] = {
-        'state': 'awaiting_password',
-        'email': email
-    }
-    bot.send_message(message.chat.id, "Теперь придумайте и введите пароль (минимум 6 символов):")
+    if action == 'register':
+        # Проверка что email не занят
+        found_user_id, _ = find_user_by_email(email)
+        if found_user_id:
+            bot.send_message(message.chat.id, "Этот email уже зарегистрирован. Попробуйте войти.")
+            del user_states[user_id]
+            return
+        
+        user_states[user_id] = {
+            'state': 'awaiting_password',
+            'action': 'register',
+            'email': email
+        }
+        bot.send_message(message.chat.id, "Теперь придумайте и введите пароль (минимум 6 символов):")
+    
+    elif action == 'login':
+        found_user_id, user_data = find_user_by_email(email)
+        if not found_user_id:
+            bot.send_message(message.chat.id, "Пользователь с таким email не найден.")
+            del user_states[user_id]
+            return
+        
+        user_states[user_id] = {
+            'state': 'awaiting_password',
+            'action': 'login',
+            'email': email,
+            'target_user_id': found_user_id
+        }
+        bot.send_message(message.chat.id, "Введите ваш пароль:")
 
-# === ОБРАБОТКА ПАРОЛЯ ===
-@bot.message_handler(func=lambda message: str(message.chat.id) in user_states and user_states[str(message.chat.id)]['state'] == 'awaiting_password')
+# === ОБНОВЛЕННАЯ ОБРАБОТКА ПАРОЛЯ ===
+@bot.message_handler(func=lambda message: str(message.chat.id) in user_states and 
+                     user_states[str(message.chat.id)]['state'] == 'awaiting_password')
 def handle_password(message):
     user_id = str(message.chat.id)
     password = message.text.strip()
+    action = user_states[user_id]['action']
     
-    if len(password) < 6:
-        bot.send_message(message.chat.id, "Пароль слишком короткий (минимум 6 символов). Попробуйте еще раз:")
-        return
+    if action == 'register':
+        if len(password) < 6:
+            bot.send_message(message.chat.id, "Пароль слишком короткий (минимум 6 символов). Попробуйте еще раз:")
+            return
+        
+        email = user_states[user_id]['email']
+        confirmation_code = str(random.randint(100000, 999999))
+        
+        pending_confirmations[user_id] = {
+            'email': email,
+            'password': password,
+            'code': confirmation_code
+        }
+        
+        try:
+            send_confirmation_email(email, confirmation_code)
+            user_states[user_id]['state'] = 'awaiting_confirmation'
+            bot.send_message(message.chat.id, 
+                f"Код подтверждения отправлен на {email}.\n"
+                "Пожалуйста, введите полученный 6-значный код для подтверждения регистрации."
+            )
+        except Exception as e:
+            print(f"Ошибка отправки email: {e}")
+            bot.send_message(message.chat.id, "Не удалось отправить письмо. Попробуйте позже.")
+            del user_states[user_id]
     
-    email = user_states[user_id]['email']
-    confirmation_code = str(random.randint(100000, 999999))
-    
-    pending_confirmations[user_id] = {
-        'email': email,
-        'password': password,
-        'code': confirmation_code
-    }
-    
-    try:
-        send_confirmation_email(email, confirmation_code)
-        user_states[user_id]['state'] = 'awaiting_confirmation'
-        bot.send_message(message.chat.id, 
-            f"Код подтверждения отправлен на {email}.\n"
-            "Пожалуйста, введите полученный 6-значный код для подтверждения регистрации."
-        )
-    except Exception as e:
-        print(f"Ошибка отправки email: {e}")
-        bot.send_message(message.chat.id, "Не удалось отправить письмо. Попробуйте позже.")
-        del user_states[user_id]
+    elif action == 'login':
+        target_user_id = user_states[user_id]['target_user_id']
+        users = load_json("users.json")
+        
+        if users[target_user_id]['password'] == password:
+            # Обновляем текущего пользователя
+            users[user_id] = users[target_user_id].copy()
+            users[user_id]['last_auth'] = datetime.now().isoformat()
+            save_json(users, "users.json")
+            
+            del user_states[user_id]
+            bot.send_message(message.chat.id, "✅ Вход выполнен успешно!", reply_markup=main_menu())
+        else:
+            bot.send_message(message.chat.id, "❌ Неверный пароль. Попробуйте еще раз:")
+
+
 
 # === ОБРАБОТКА КОДА ПОДТВЕРЖДЕНИЯ ===
-@bot.message_handler(func=lambda message: str(message.chat.id) in user_states and user_states[str(message.chat.id)]['state'] == 'awaiting_confirmation')
+@bot.message_handler(func=lambda message: str(message.chat.id) in user_states and 
+                     user_states[str(message.chat.id)]['state'] == 'awaiting_confirmation')
 def handle_confirmation(message):
     user_id = str(message.chat.id)
     user_input = message.text.strip()
@@ -144,7 +233,7 @@ def handle_confirmation(message):
         del user_states[user_id]
         
         bot.send_message(message.chat.id, 
-            "Регистрация успешно завершена!\n"
+            "✅ Регистрация успешно завершена!\n"
             f"Email: {saved_data['email']}\n"
             "Теперь вы можете использовать бота.", 
             reply_markup=main_menu()
@@ -152,15 +241,23 @@ def handle_confirmation(message):
     else:
         bot.send_message(message.chat.id, "❌ Неверный код подтверждения. Пожалуйста, введите правильный 6-значный код:")
 
-# === ОСТАЛЬНЫЕ ФУНКЦИИ БОТА (без изменений) ===
+# === ОСНОВНЫЕ ФУНКЦИИ БОТА ===
+def check_auth(message):
+    user_id = str(message.chat.id)
+    if not is_registered(user_id):
+        bot.send_message(message.chat.id, "Пожалуйста, сначала зарегистрируйтесь с помощью /start")
+        return False
+    return True
+
 @bot.message_handler(func=lambda m: m.text == "❓ Помощь")
 def help_cmd(m):
+    if not check_auth(m): return
     bot.send_message(m.chat.id,
         "Доступные действия:\n"
-        "Список олимпиад — просмотр\n"
-        "Подписаться — выбрать из списка\n"
-        "Мои подписки — список и отписка\n"
-        "Настройки — напоминание"
+        "📋 Список олимпиад — просмотр\n"
+        "🔔 Подписаться — выбрать из списка\n"
+        "📌 Мои подписки — список и отписка\n"
+        "⚙️ Настройки — напоминание"
     )
 
 def get_olympiad_page(page, action="none"):
@@ -170,22 +267,22 @@ def get_olympiad_page(page, action="none"):
     end = start + ITEMS_PER_PAGE
     page_data = olympiads[start:end]
 
-    text = f"Олимпиады (стр. {page+1}):\n\n"
+    text = f"📋 Олимпиады (стр. {page+1}):\n\n"
     kb = InlineKeyboardMarkup()
 
     for o in page_data:
         dt = datetime.fromisoformat(o["datetime"]).strftime("%d.%m.%Y %H:%M")
         text += f"{o['id']}. {o['title']} — {dt}\n"
         if action == "subscribe":
-            kb.add(InlineKeyboardButton(f"Подписаться на {o['id']}", callback_data=f"sub:{o['id']}"))
+            kb.add(InlineKeyboardButton(f"✅ Подписаться на {o['id']}", callback_data=f"sub:{o['id']}"))
         elif action == "unsubscribe":
-            kb.add(InlineKeyboardButton(f"Отписаться от {o['id']}", callback_data=f"unsub:{o['id']}"))
+            kb.add(InlineKeyboardButton(f"❌ Отписаться от {o['id']}", callback_data=f"unsub:{o['id']}"))
 
     nav = []
     if page > 0:
-        nav.append(InlineKeyboardButton("Назад", callback_data=f"page:{action}:{page-1}"))
+        nav.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"page:{action}:{page-1}"))
     if end < total:
-        nav.append(InlineKeyboardButton("Далее", callback_data=f"page:{action}:{page+1}"))
+        nav.append(InlineKeyboardButton("➡️ Далее", callback_data=f"page:{action}:{page+1}"))
     if nav:
         kb.row(*nav)
 
@@ -193,55 +290,39 @@ def get_olympiad_page(page, action="none"):
 
 @bot.message_handler(func=lambda m: m.text == "📋 Список олимпиад")
 def show_list(m):
-    user_id = str(m.chat.id)
-    users = load_json("users.json")
-    
-    if user_id not in users:
-        bot.send_message(m.chat.id, "Пожалуйста, сначала зарегистрируйтесь с помощью /start")
-        return
-    
+    if not check_auth(m): return
     text, kb = get_olympiad_page(0, action="none")
     bot.send_message(m.chat.id, text, reply_markup=kb)
 
-@bot.message_handler(func=lambda m: m.text == "Подписаться")
+@bot.message_handler(func=lambda m: m.text == "🔔 Подписаться")
 def show_subscribe_menu(m):
-    user_id = str(m.chat.id)
-    users = load_json("users.json")
-    
-    if user_id not in users:
-        bot.send_message(m.chat.id, "Пожалуйста, сначала зарегистрируйтесь с помощью /start")
-        return
-    
+    if not check_auth(m): return
     text, kb = get_olympiad_page(0, action="subscribe")
     bot.send_message(m.chat.id, "Выберите олимпиаду для подписки:", reply_markup=kb)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("sub:"))
 def handle_subscribe(call):
     user_id = str(call.from_user.id)
-    users = load_json("users.json")
-    
-    if user_id not in users:
+    if not is_registered(user_id):
         bot.answer_callback_query(call.id, "Пожалуйста, сначала зарегистрируйтесь с помощью /start")
         return
     
     oid = int(call.data.split(":")[1])
+    users = load_json("users.json")
     
     if oid not in users[user_id]["subscriptions"]:
         users[user_id]["subscriptions"].append(oid)
         save_json(users, "users.json")
-        bot.answer_callback_query(call.id, f"Подписка на {oid} оформлена!")
+        bot.answer_callback_query(call.id, f"✅ Подписка на {oid} оформлена!")
     else:
         bot.answer_callback_query(call.id, "Вы уже подписаны.")
 
-@bot.message_handler(func=lambda m: m.text == "Мои подписки")
+@bot.message_handler(func=lambda m: m.text == "📌 Мои подписки")
 def show_my_subs(m):
+    if not check_auth(m): return
+    
     user_id = str(m.chat.id)
     users = load_json("users.json")
-    
-    if user_id not in users:
-        bot.send_message(m.chat.id, "Пожалуйста, сначала зарегистрируйтесь с помощью /start")
-        return
-    
     olympiads = load_json("olympiads.json")
     subs = users[user_id]["subscriptions"]
     
@@ -249,30 +330,29 @@ def show_my_subs(m):
         bot.send_message(m.chat.id, "У вас нет подписок.")
         return
 
-    text = "Ваши подписки:\n\n"
+    text = "📌 Ваши подписки:\n\n"
     kb = InlineKeyboardMarkup()
     for o in olympiads:
         if o["id"] in subs:
             dt = datetime.fromisoformat(o["datetime"]).strftime("%d.%m.%Y %H:%M")
             text += f"{o['id']}. {o['title']} — {dt}\n"
-            kb.add(InlineKeyboardButton(f"Отписаться от {o['id']}", callback_data=f"unsub:{o['id']}"))
+            kb.add(InlineKeyboardButton(f"❌ Отписаться от {o['id']}", callback_data=f"unsub:{o['id']}"))
     bot.send_message(m.chat.id, text, reply_markup=kb)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("unsub:"))
 def handle_unsubscribe(call):
     user_id = str(call.from_user.id)
-    users = load_json("users.json")
-    
-    if user_id not in users:
+    if not is_registered(user_id):
         bot.answer_callback_query(call.id, "Пожалуйста, сначала зарегистрируйтесь с помощью /start")
         return
     
     oid = int(call.data.split(":")[1])
+    users = load_json("users.json")
     
     if oid in users[user_id]["subscriptions"]:
         users[user_id]["subscriptions"].remove(oid)
         save_json(users, "users.json")
-        bot.answer_callback_query(call.id, f"Подписка на {oid} удалена.")
+        bot.answer_callback_query(call.id, f"❌ Подписка на {oid} удалена.")
     else:
         bot.answer_callback_query(call.id, "Вы не были подписаны.")
 
@@ -288,19 +368,17 @@ def handle_page_nav(call):
         reply_markup=kb
     )
 
-@bot.message_handler(func=lambda m: m.text == "Настройки")
+@bot.message_handler(func=lambda m: m.text == "⚙️ Настройки")
 def show_settings_hint(m):
+    if not check_auth(m): return
     bot.send_message(m.chat.id, "Введите команду: /settings <дней>\nНапример: /settings 2")
 
 @bot.message_handler(commands=["settings"])
 def handle_settings(m):
+    if not check_auth(m): return
+    
     user_id = str(m.chat.id)
     users = load_json("users.json")
-    
-    if user_id not in users:
-        bot.send_message(m.chat.id, "Пожалуйста, сначала зарегистрируйтесь с помощью /start")
-        return
-    
     args = m.text.split()
     
     if len(args) != 2 or not args[1].isdigit():
@@ -310,7 +388,7 @@ def handle_settings(m):
     days = int(args[1])
     users[user_id]["notify_days_before"] = days
     save_json(users, "users.json")
-    bot.send_message(m.chat.id, f"Уведомления за {days} дней сохранены.")
+    bot.send_message(m.chat.id, f"🔔 Уведомления за {days} дней сохранены.")
 
-print("Бот запущен с интерактивной подпиской и регистрацией")
+print("✅ Бот запущен с интерактивной подпиской и регистрацией")
 bot.polling()
