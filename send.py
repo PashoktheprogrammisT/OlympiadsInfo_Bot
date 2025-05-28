@@ -50,9 +50,9 @@ def send_confirmation_email(email, code):
 # === ГЛАВНОЕ МЕНЮ ===
 def main_menu():
     kb = ReplyKeyboardMarkup(resize_keyboard=True)
-    kb.row("📋 Список олимпиад", "📌 Мои подписки")
-    kb.row("🔔 Подписаться", "⚙️ Настройки")
-    kb.row("❓ Помощь")
+    kb.row("Список олимпиад", "Мои подписки")
+    kb.row("Подписаться", "⚙Настройки")
+    kb.row("Помощь")
     return kb
 
 # === КОМАНДА START ===
@@ -144,7 +144,7 @@ def handle_confirmation(message):
         del user_states[user_id]
         
         bot.send_message(message.chat.id, 
-            "✅ Регистрация успешно завершена!\n"
+            "Регистрация успешно завершена!\n"
             f"Email: {saved_data['email']}\n"
             "Теперь вы можете использовать бота.", 
             reply_markup=main_menu()
@@ -157,10 +157,10 @@ def handle_confirmation(message):
 def help_cmd(m):
     bot.send_message(m.chat.id,
         "Доступные действия:\n"
-        "📋 Список олимпиад — просмотр\n"
-        "🔔 Подписаться — выбрать из списка\n"
-        "📌 Мои подписки — список и отписка\n"
-        "⚙️ Настройки — напоминание"
+        "Список олимпиад — просмотр\n"
+        "Подписаться — выбрать из списка\n"
+        "Мои подписки — список и отписка\n"
+        "Настройки — напоминание"
     )
 
 def get_olympiad_page(page, action="none"):
@@ -170,22 +170,22 @@ def get_olympiad_page(page, action="none"):
     end = start + ITEMS_PER_PAGE
     page_data = olympiads[start:end]
 
-    text = f"📋 Олимпиады (стр. {page+1}):\n\n"
+    text = f"Олимпиады (стр. {page+1}):\n\n"
     kb = InlineKeyboardMarkup()
 
     for o in page_data:
         dt = datetime.fromisoformat(o["datetime"]).strftime("%d.%m.%Y %H:%M")
         text += f"{o['id']}. {o['title']} — {dt}\n"
         if action == "subscribe":
-            kb.add(InlineKeyboardButton(f"✅ Подписаться на {o['id']}", callback_data=f"sub:{o['id']}"))
+            kb.add(InlineKeyboardButton(f"Подписаться на {o['id']}", callback_data=f"sub:{o['id']}"))
         elif action == "unsubscribe":
-            kb.add(InlineKeyboardButton(f"❌ Отписаться от {o['id']}", callback_data=f"unsub:{o['id']}"))
+            kb.add(InlineKeyboardButton(f"Отписаться от {o['id']}", callback_data=f"unsub:{o['id']}"))
 
     nav = []
     if page > 0:
-        nav.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"page:{action}:{page-1}"))
+        nav.append(InlineKeyboardButton("Назад", callback_data=f"page:{action}:{page-1}"))
     if end < total:
-        nav.append(InlineKeyboardButton("➡️ Далее", callback_data=f"page:{action}:{page+1}"))
+        nav.append(InlineKeyboardButton("Далее", callback_data=f"page:{action}:{page+1}"))
     if nav:
         kb.row(*nav)
 
@@ -203,7 +203,7 @@ def show_list(m):
     text, kb = get_olympiad_page(0, action="none")
     bot.send_message(m.chat.id, text, reply_markup=kb)
 
-@bot.message_handler(func=lambda m: m.text == "🔔 Подписаться")
+@bot.message_handler(func=lambda m: m.text == "Подписаться")
 def show_subscribe_menu(m):
     user_id = str(m.chat.id)
     users = load_json("users.json")
@@ -229,11 +229,11 @@ def handle_subscribe(call):
     if oid not in users[user_id]["subscriptions"]:
         users[user_id]["subscriptions"].append(oid)
         save_json(users, "users.json")
-        bot.answer_callback_query(call.id, f"✅ Подписка на {oid} оформлена!")
+        bot.answer_callback_query(call.id, f"Подписка на {oid} оформлена!")
     else:
         bot.answer_callback_query(call.id, "Вы уже подписаны.")
 
-@bot.message_handler(func=lambda m: m.text == "📌 Мои подписки")
+@bot.message_handler(func=lambda m: m.text == "Мои подписки")
 def show_my_subs(m):
     user_id = str(m.chat.id)
     users = load_json("users.json")
@@ -249,13 +249,13 @@ def show_my_subs(m):
         bot.send_message(m.chat.id, "У вас нет подписок.")
         return
 
-    text = "📌 Ваши подписки:\n\n"
+    text = "Ваши подписки:\n\n"
     kb = InlineKeyboardMarkup()
     for o in olympiads:
         if o["id"] in subs:
             dt = datetime.fromisoformat(o["datetime"]).strftime("%d.%m.%Y %H:%M")
             text += f"{o['id']}. {o['title']} — {dt}\n"
-            kb.add(InlineKeyboardButton(f"❌ Отписаться от {o['id']}", callback_data=f"unsub:{o['id']}"))
+            kb.add(InlineKeyboardButton(f"Отписаться от {o['id']}", callback_data=f"unsub:{o['id']}"))
     bot.send_message(m.chat.id, text, reply_markup=kb)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("unsub:"))
@@ -272,7 +272,7 @@ def handle_unsubscribe(call):
     if oid in users[user_id]["subscriptions"]:
         users[user_id]["subscriptions"].remove(oid)
         save_json(users, "users.json")
-        bot.answer_callback_query(call.id, f"❌ Подписка на {oid} удалена.")
+        bot.answer_callback_query(call.id, f"Подписка на {oid} удалена.")
     else:
         bot.answer_callback_query(call.id, "Вы не были подписаны.")
 
@@ -288,7 +288,7 @@ def handle_page_nav(call):
         reply_markup=kb
     )
 
-@bot.message_handler(func=lambda m: m.text == "⚙️ Настройки")
+@bot.message_handler(func=lambda m: m.text == "Настройки")
 def show_settings_hint(m):
     bot.send_message(m.chat.id, "Введите команду: /settings <дней>\nНапример: /settings 2")
 
@@ -310,7 +310,7 @@ def handle_settings(m):
     days = int(args[1])
     users[user_id]["notify_days_before"] = days
     save_json(users, "users.json")
-    bot.send_message(m.chat.id, f"🔔 Уведомления за {days} дней сохранены.")
+    bot.send_message(m.chat.id, f"Уведомления за {days} дней сохранены.")
 
-print("✅ Бот запущен с интерактивной подпиской и регистрацией")
+print("Бот запущен с интерактивной подпиской и регистрацией")
 bot.polling()
