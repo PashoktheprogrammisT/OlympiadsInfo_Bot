@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from utils import load_json
 from telebot import TeleBot
 
-TOKEN = "7807718978:AAEE4pDJSrnDHHDh8uW4mPoumCaMwBoYq_s"
+TOKEN = "8017233867:AAHnIo9gG8rT1ne7D8Ca4WcSsNbvMfC2vQE"
 bot = TeleBot(TOKEN)
 
 def notify_users():
